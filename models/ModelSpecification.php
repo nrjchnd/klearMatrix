@@ -3,7 +3,10 @@ class KlearMatrix_Model_ModelSpecification
 {
 
     protected $_config;
+    /** @deprecated **/
     protected $_class;
+
+    protected $_entity;
 
     protected $_pk;
     protected $_instance;
@@ -13,7 +16,11 @@ class KlearMatrix_Model_ModelSpecification
         $this->_config = new Klear_Model_ConfigParser;
         $this->_config->setConfig($config);
 
+        /** @deprecated **/
         $this->_class = $this->_config->getRequiredProperty("class");
+
+        /** @todo replace with getRequiredProperty **/
+        $this->_entity = $this->_config->getProperty("entity");
         $this->_instance = new $this->_class;
     }
 
@@ -27,9 +34,15 @@ class KlearMatrix_Model_ModelSpecification
         return $this->_instance;
     }
 
+    /** @deprecated **/
     public function getClassName()
     {
         return $this->_class;
+    }
+
+    public function getEntityName()
+    {
+        return $this->_entity;
     }
 
     public function getField($fName)

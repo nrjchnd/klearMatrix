@@ -11,8 +11,16 @@ class KlearMatrix_Model_ResponseItem
     protected $_item;
     protected $_config;
 
+    /**
+     * @deprecated
+     */
     protected $_mapper;
+    /**
+     * @deprecated
+     */
     protected $_modelFile;
+
+    protected $_entity;
     protected $_routeDispatcher;
 
     protected $_plugin;
@@ -111,6 +119,7 @@ class KlearMatrix_Model_ResponseItem
     protected $_configOptions = array(
         '_mapper' => array('mapper', false),
         '_modelFile' => array('modelFile', false),
+        '_entity' => array('entity', false),
         '_filteredField' => array('filterField', false),
         '_filterClass' => array('filterClass', false),
         '_forcedValues' => array('forcedValues', false),
@@ -159,14 +168,24 @@ class KlearMatrix_Model_ResponseItem
             }
         }
 
-        //Si hay modelFile, lo parseamos
-        if ($this->_modelFile) {
-            $this->_parseModelFile();
-        }
+        if ($GLOBALS['sf']) {
 
-        //Si hay mapper, lo checkeamos a ver si es válido
-        if ($this->_mapper) {
-            $this->_checkClassesExist(array("_mapper"));
+            //Si hay modelFile, lo parseamos
+            if ($this->_entity) {
+                $this->_parseModelFile();
+            }
+
+        } else if (!$GLOBALS['sf']) {
+
+            //Si hay modelFile, lo parseamos
+            if ($this->_modelFile) {
+                $this->_parseModelFile();
+            }
+
+            //Si hay mapper, lo checkeamos a ver si es válido
+            if ($this->_mapper) {
+                $this->_checkClassesExist(array("_mapper"));
+            }
         }
         return $this;
     }
@@ -275,11 +294,13 @@ class KlearMatrix_Model_ResponseItem
         return $this->_routeDispatcher;
     }
 
+    /** @deprecated **/
     public function getMapperName()
     {
         return $this->_mapper;
     }
 
+    /** @deprecated **/
     public function getModelName()
     {
         $className = $this->_modelSpec->getClassName();
@@ -287,6 +308,11 @@ class KlearMatrix_Model_ResponseItem
             $className = substr($className, 1);
         }
         return $className;
+    }
+
+    public function getEntityName()
+    {
+        return $this->_modelSpec->getEntityName();
     }
 
     public function getPlugin($defaultValue = '')
@@ -533,7 +559,11 @@ class KlearMatrix_Model_ResponseItem
         $this->_visibleColumns->addCols($ghostColumns);
 
         // Campos de la BBDD
-        $columns = $this->_getVisibleColumns($modelInstance, $ignoreBlackList);
+        if ($GLOBALS['sf']) {
+            $columns = $this->_getVisibleColumns(null, $ignoreBlackList);
+        } else if (!$GLOBALS['sf']) {
+            $columns = $this->_getVisibleColumns($modelInstance, $ignoreBlackList);
+        }
         $this->_visibleColumns->addCols($columns);
 
         // Tablas dependientes
@@ -802,18 +832,25 @@ class KlearMatrix_Model_ResponseItem
 
     protected function _getVisibleColumns($model, $ignoreBlackList = false)
     {
+        /** @deprecated **/
+        $model = $model;
+
         $columns = array();
+        if ($GLOBALS['sf']) {
+            $dbFieldNames = array_keys($this->_modelSpec->getFields());
+        } else if (!$GLOBALS['sf']) {
+            $dbFieldNames = array_keys($model->getColumnsList());
+        }
+
         /*
          * Iteramos sobre todos los campos
         */
-        $dbFieldNames = array_keys($model->getColumnsList());
         foreach ($dbFieldNames as $dbFieldName) {
             /*
              * TODO: Revisar esto, en principio ya no debería hacer falta comprobar el $ignoreBlackList,
             *       la lista no se genera si no es necesaria, pero hay que repasar el método _getVisibleFileColumns.
             */
             if (!$ignoreBlackList && isset($this->_blacklist[$dbFieldName])) {
-
                 continue;
             }
 
@@ -821,15 +858,21 @@ class KlearMatrix_Model_ResponseItem
 
             //Si es un campo ghost, pasamos de él. Ya estaba metido antes
             if (isset($config->type) && $config->type == 'ghost') {
-
                 continue;
             }
 
             $column = $this->_createColumn($dbFieldName, $config);
 
-            $multiLangFields = $model->getMultiLangColumnsList();
-            if (isset($multiLangFields[$dbFieldName])) {
+            if ($GLOBALS['sf']) {
+                $multiLangFields = $this->_getMultiLangColumnsList();
+                /**
+                 * @todo  put _getMultiLangColumnsList here and exec $column->markAsMultilang directly
+                 */
+            } else if (!$GLOBALS['sf']) {
+                $multiLangFields = $model->getMultiLangColumnsList();
+            }
 
+            if (isset($multiLangFields[$dbFieldName])) {
                 $column->markAsMultilang();
             }
 
@@ -838,6 +881,19 @@ class KlearMatrix_Model_ResponseItem
 
         return $columns;
     }
+
+    private function _getMultiLangColumnsList()
+    {
+        $response = [];
+        foreach ($this->_modelSpec->getFields() as $fieldName => $spec) {
+            if (isset($spec->isMultilang) && $spec->isMultilang) {
+                $response[] = $fieldName;
+            }
+        }
+
+        return $response;
+    }
+
 
     /**
      * Devuelve las columans de tipo dependant

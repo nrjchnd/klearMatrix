@@ -14,9 +14,14 @@ class KlearMatrix_ListController extends Zend_Controller_Action
      */
     protected $_item;
 
+    /** @deprecated **/
     protected $_mapperName;
+    /** @deprecated **/
     protected $_mapper;
+    /** @deprecated **/
     protected $_model;
+
+    protected $_entity;
     protected $_contextParam;
 
     public function init()
@@ -120,9 +125,16 @@ class KlearMatrix_ListController extends Zend_Controller_Action
             $rawCount = $result["rawCount"];
 
         } else if ($this->_contextParam == "csv" && isset($csvParams["rawValues"]) && $csvParams["rawValues"]) {
+
+            //@todo use $dataGateway
             $results = $this->_mapper->fetchListToArray($where, $order, $count, $offset);
         } else {
-            $results = $this->_mapper->fetchList($where, $order, $count, $offset);
+            if ($GLOBALS['sf'] && $entity = $this->_item->getEntityName()) {
+                $dataGateway = \Zend_Registry::get('data_gateway');
+                $results = $dataGateway->findBy($entity, $where, $order, $count, $offset);
+            } else {
+                $results = $this->_mapper->fetchList($where, $order, $count, $offset);
+            }
         }
 
         $this->_helper->log(sizeof($results) . ' elements return by fetchList for:' . $this->_mapperName);
@@ -131,6 +143,7 @@ class KlearMatrix_ListController extends Zend_Controller_Action
             if ($config->getProperty("rawSelect")) {
                 $totalItems = $rawCount;
             } else {
+                /** @todo **/
                 $totalItems = $this->_mapper->countByQuery($where);
             }
             if (!is_null($count) && !is_null($offset)) {
@@ -300,9 +313,14 @@ class KlearMatrix_ListController extends Zend_Controller_Action
             } else {
 
                 // Por defecto ordenamos por PK
-                $order = $this->_item->getPkName();
+                if ($GLOBALS['sf']) {
+                    $order[$this->_item->getPkName()] = 'ASC';
+                } else {
+                    $order = $this->_item->getPkName();
+                }
             }
         }
+
         return $order;
     }
 
