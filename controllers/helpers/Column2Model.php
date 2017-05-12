@@ -95,12 +95,17 @@ class KlearMatrix_Controller_Helper_Column2Model extends Zend_Controller_Action_
             foreach ($item->getForcedValues() as $field => $value) {
                 try {
                     if ($GLOBALS['sf']) {
-                        $model->{'set' . ucfirst($field)}($value);
+
+                        $setter = 'set' . ucfirst($field);
+                        if (!method_exists($model, $setter)) {
+                            $setter .= 'Id';
+                        }
+                        $model->{$setter}($value);
                     } else if (!$GLOBALS['sf']) {
                         $varName = $model->columnNameToVar($field);
                         $model->{'set' . $varName}($value);
                     }
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
                     // Nothing to do... condition not found in model... :S
                     // Debemos morir??
                 }

@@ -21,7 +21,6 @@ class KlearMatrix_ListController extends Zend_Controller_Action
     /** @deprecated **/
     protected $_model;
 
-    protected $_entity;
     protected $_contextParam;
 
     public function init()
@@ -65,11 +64,14 @@ class KlearMatrix_ListController extends Zend_Controller_Action
                 ->initContext($contextParam);
         }
         $this->_item = $this->_mainRouter->getCurrentItem();
-        $this->_mapperName = $this->_item->getMapperName();
-        $this->_mapper = \KlearMatrix_Model_Mapper_Factory::create($this->_mapperName);
-        $this->_model = $this->_item->getModelSpec()->getInstance();
-        $this->_helper->log('List mapper: ' . $this->_mapperName);
 
+        if (!$GLOBALS['sf']) {
+            $this->_mapperName = $this->_item->getMapperName();
+            $this->_mapper = \KlearMatrix_Model_Mapper_Factory::create($this->_mapperName);
+            $this->_model = $this->_item->getModelSpec()->getInstance();
+        }
+
+        $this->_helper->log('List mapper: ' . $this->_mapperName);
     }
 
 
@@ -90,7 +92,6 @@ class KlearMatrix_ListController extends Zend_Controller_Action
         $data = new KlearMatrix_Model_MatrixResponse();
 
         $ignoreBlackList = $this->_getIgnoreBlackList();
-
         $cols = $this->_item->getVisibleColumns($ignoreBlackList);
         $model = $this->_item->getObjectInstance();
 
@@ -129,7 +130,7 @@ class KlearMatrix_ListController extends Zend_Controller_Action
             //@todo use $dataGateway
             $results = $this->_mapper->fetchListToArray($where, $order, $count, $offset);
         } else {
-            if ($GLOBALS['sf'] && $entity = $this->_item->getEntityName()) {
+            if ($GLOBALS['sf'] && $entity = $this->_item->getEntityClassName()) {
                 $dataGateway = \Zend_Registry::get('data_gateway');
                 $results = $dataGateway->findBy($entity, $where, $order, $count, $offset);
             } else {
@@ -143,8 +144,13 @@ class KlearMatrix_ListController extends Zend_Controller_Action
             if ($config->getProperty("rawSelect")) {
                 $totalItems = $rawCount;
             } else {
-                /** @todo **/
-                $totalItems = $this->_mapper->countByQuery($where);
+
+                if ($GLOBALS['sf']) {
+                    $dataGateway = \Zend_Registry::get('data_gateway');
+                    $totalItems = $dataGateway->countBy($entity, $where);
+                } else if (!$GLOBALS['sf']) {
+                    $totalItems = $this->_mapper->countByQuery($where);
+                }
             }
             if (!is_null($count) && !is_null($offset)) {
 
@@ -166,7 +172,6 @@ class KlearMatrix_ListController extends Zend_Controller_Action
 
             $data->fixResults($this->_item);
         }
-
 
         $data->parseItemAttrs($this->_item);
 
@@ -192,7 +197,9 @@ class KlearMatrix_ListController extends Zend_Controller_Action
 
         $jsonResponse->addCssFile("/css/jquery.ui.spinner.css");
 
-        $jsonResponse->setData($this->_helper->hookedDataForScreen($this->_item, 'setData', $data));
+        $responseData = $this->_helper->hookedDataForScreen($this->_item, 'setData', $data);
+        $jsonResponse->setData($responseData);
+
         $jsonResponse->attachView($this->_helper->hookedDataForScreen($this->_item, 'attachView', $this->view));
     }
 
@@ -277,7 +284,6 @@ class KlearMatrix_ListController extends Zend_Controller_Action
             $orderConfig = $this->_item->getOrderConfig();
 
             if ($orderConfig && $orderConfig->getProperty('field')) {
-
                 $order = $orderConfig->getProperty('field');
 
                 if ($order instanceof Zend_Config) {
@@ -296,14 +302,27 @@ class KlearMatrix_ListController extends Zend_Controller_Action
                     if (!is_null($orderColumn)) {
                         $orders[] = $orderColumn->getOrderField($cols->getLangs());
                     } else {
-                        $orders[] = $_order;
+
+                        if ($GLOBALS['sf']) {
+                            /**
+                             * @todo improve this
+                             */
+                            if ($orderConfig->getProperty('type')) {
+                                $orders[$_order] = null;
+                            } else {
+                                list($fld, $criteria) = explode(" ", $_order, 2);
+                                $orders[$fld] = $criteria;
+                            }
+
+                        } else if (!$GLOBALS['sf']) {
+                            $orders[] = $_order;
+                        }
                     }
 
                 }
                 $order = $orders;
 
                 if ($orderConfig->getProperty('type')) {
-
                     foreach ($order as $key => $val) {
 
                         $order[$key] .= ' '. $orderConfig->getProperty('type');
@@ -314,7 +333,9 @@ class KlearMatrix_ListController extends Zend_Controller_Action
 
                 // Por defecto ordenamos por PK
                 if ($GLOBALS['sf']) {
-                    $order[$this->_item->getPkName()] = 'ASC';
+                    $entitySegments = explode('\\', $this->_item->getEntityClassName());
+                    $field = end($entitySegments) . '.' . $this->_item->getPkName();
+                    $order[$field] = 'ASC';
                 } else {
                     $order = $this->_item->getPkName();
                 }

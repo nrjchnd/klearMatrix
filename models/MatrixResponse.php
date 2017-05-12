@@ -213,12 +213,10 @@ class KlearMatrix_Model_MatrixResponse
                 throw new Exception("No Parent id / pk found");
             }
 
-
         } else {
             // Pantallas de elemento único instancia por $curScreenPK
             $this->_parentPk = $curScreenPK;
             $this->_parentId = $router->getParam('parentId', false);
-
         }
 
         // Instanciamos pantalla
@@ -226,11 +224,7 @@ class KlearMatrix_Model_MatrixResponse
         $parentScreen->setRouteDispatcher($router);
         $parentScreen->setConfig($router->getConfig()->getScreenConfig($parentScreenName));
 
-        if ($GLOBALS['sf']) {
-
-            $parentEntity = $parentScreen->getEntityName();
-
-        } else if (!$GLOBALS['sf']) {
+        if (!$GLOBALS['sf']) {
             /**
              * @deprecated
              */
@@ -241,11 +235,7 @@ class KlearMatrix_Model_MatrixResponse
         $defaultParentCol = $parentColumns->getDefaultCol();
 
         // Recuperamos mapper, para recuperar datos principales (default value)
-
-        if ($GLOBALS['sf']) {
-
-        } else if (!$GLOBALS['sf']) {
-
+        if (!$GLOBALS['sf']) {
             /**
              * @deprecated
              */
@@ -259,6 +249,20 @@ class KlearMatrix_Model_MatrixResponse
 
         if ($GLOBALS['sf']) {
 
+            $parentEntity = $parentScreen->getEntityClassName();
+            $entityName = $parentScreen->getEntityName();
+            $dataGateway = \Zend_Registry::get('data_gateway');
+
+            if (is_array($pk)) {
+                $where = [
+                    $entityName .'.id in ('. implode(',', $pk) .')'
+                ];
+                $this->_parentData = $dataGateway->findBy($parentEntity, $where);
+                $this->_parentData = current($this->_parentData);
+            } else {
+               $this->_parentData = $dataGateway->find($parentEntity, $pk);
+            }
+
         } else if (!$GLOBALS['sf']) {
             /**
              * @deprecated
@@ -268,13 +272,23 @@ class KlearMatrix_Model_MatrixResponse
 
         if ($this->_parentData) {
 
-            if (in_array($defaultParentCol->getDbFieldName(), $this->_parentData->getFileObjects())) {
+            $fsoImplemened = $GLOBALS['sf'] ? false : true;
+            if ($fsoImplemened && in_array($defaultParentCol->getDbFieldName(), $this->_parentData->getFileObjects())) {
+
+                /**
+                 * @todo implement FSO in DTOs
+                 */
                 $specsGetter = 'get' . ucfirst($defaultParentCol->getDbFieldName()) . 'Specs';
                 $specs = $this->_parentData->$specsGetter();
                 $getter = 'get' . $this->_parentData->columnNameToVar($specs['baseNameName']);
             } else {
                 try {
-                    $getter = 'get' . $this->_parentData->columnNameToVar($defaultParentCol->getDbFieldName());
+                    if ($GLOBALS['sf']) {
+                        $getter = 'get' . ucfirst($defaultParentCol->getDbFieldName());
+                    } else {
+                        $getter = 'get' . $this->_parentData->columnNameToVar($defaultParentCol->getDbFieldName());
+                    }
+
                 } catch (\Exception $e) {
                     throw new \Exception($defaultParentCol->getDbFieldName() . " is not a valid default column. Chech your modelName.yaml");
                 }
@@ -421,7 +435,6 @@ class KlearMatrix_Model_MatrixResponse
 
             foreach ($this->_fieldOptions as $option) {
                 if ($option->mustCustomize() === true) {
-
                     $customization = $option->customizeParentOption($result);
                     if (! is_null($customization)
                         && !isset($customOptions[key($customization)])
