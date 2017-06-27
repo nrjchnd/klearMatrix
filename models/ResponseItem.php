@@ -1052,15 +1052,14 @@ class KlearMatrix_Model_ResponseItem
         return $forcedValueConds;
     }
 
-    protected function _prependFieldEntity($field)
+    protected function _setSelfReferences($field)
     {
-        $fieldTemplate = '%s';
-        if ($GLOBALS['sf']) {
-            $entityName = $this->getEntityName();
-            $fieldTemplate = ' IDENTITY('. $entityName .'.%s)';
+        $hasSelfReference = (strpos($field, 'self::') !== false);
+        if ($hasSelfReference) {
+            return str_replace('self::', $this->getEntityName() . '.', $field);
         }
 
-        return sprintf($fieldTemplate, $field);
+        return $this->getEntityName() . '.' . $field;
     }
 
 
@@ -1118,13 +1117,16 @@ class KlearMatrix_Model_ResponseItem
             if ($paramName == 'filtered') {
 
                 return [
-                    $field. ' = ' .$value,
+                    $field . ' = ' . $value,
                     []
                 ];
             }
 
-            $doctrineFld = $this->_prependFieldEntity($field);
-            $namedParam = trim(str_replace('.', '', $field));
+            $doctrineFld = $this->_setSelfReferences($field);
+            $namedParam = preg_replace('#identity\(([^\)]+)\)#i', '${1}', $field);
+            if (strpos($namedParam, '::') !== false) {
+                $namedParam = substr($namedParam, strpos($namedParam, '::') + 2);
+            }
 
             if (is_null($value) || $value == 'NULL') {
                 return $doctrineFld . ' is NULL';
