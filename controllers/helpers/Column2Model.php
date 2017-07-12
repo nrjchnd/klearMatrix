@@ -96,6 +96,9 @@ class KlearMatrix_Controller_Helper_Column2Model extends Zend_Controller_Action_
                 try {
                     if ($GLOBALS['sf']) {
 
+                        $field = $this->cleanIdentity($field);
+                        $field = str_ireplace('self::', '', $field);
+
                         $setter = 'set' . ucfirst($field);
                         if (!method_exists($model, $setter)) {
                             $setter .= 'Id';
@@ -111,6 +114,17 @@ class KlearMatrix_Controller_Helper_Column2Model extends Zend_Controller_Action_
                 }
             }
         }
+    }
+
+    private function cleanIdentity($field)
+    {
+        preg_match('/identity\(([^ \)]+)\)/i', $field, $matches);
+
+        if (isset($matches[1])) {
+            return $matches[1];
+        }
+
+        return $field;
     }
 
 
